@@ -1,5 +1,22 @@
 # sapper-rust
 
+<table>
+  <tr>
+    <td align="center"><img src="https://img.shields.io/badge/release-v1.0.0-blue.svg" alt="release" height="20"></td>
+    <td align="center"><img src="https://img.shields.io/badge/rust-%E2%89%A51.75-orange.svg" alt="rust" height="20"></td>
+    <td align="center"><img src="https://img.shields.io/badge/tests-18%20passed-green.svg" alt="tests" height="20"></td>
+    <td align="center"><img src="https://img.shields.io/badge/sapper.exe-5.5%20MiB-green.svg" alt="binary size" height="20"></td>
+    <td align="center"><img src="https://img.shields.io/badge/store-JSON%20on%20disk-Built-in-purple.svg" alt="store" height="20"></td>
+    <td align="center"><img src="https://img.shields.io/badge/clap%204%20%2B%20ureq%202-std-only%20deps-cyan.svg" alt="deps" height="20"></td>
+    <td align="center"><img src="https://img.shields.io/badge/license-MIT-blue.svg" alt="license" height="20"></td>
+  </tr>
+</table>
+
+<br>
+
+[简体中文](./README.md) · [English](./README.en.md) · [日本語](./README.ja.md)
+# sapper-rust
+
 `sapper` 的 Rust 重写版本。上游是 [andrewji8/sapper-v2](https://github.com/andrewji8/sapper-v2)（Python）。
 这个仓库把整套 fact-graph 工作记忆 + 多智能体指挥台搬进 Rust，目标：
 
