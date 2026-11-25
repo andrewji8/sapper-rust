@@ -1,0 +1,24 @@
+[package]
+name = "sapper"
+version = "1.0.0"
+edition = "2021"
+description = "sapper — an engagement fact graph for autonomous penetration-testing agents (Rust port, Windows-ready)"
+license = "MIT"
+
+[dependencies]
+clap = { version = "4", features = ["derive"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = { version = "1", features = ["preserve_order"] }
+chrono = "0.4"
+fs2 = "0.4"
+regex = "1"
+ureq = { version = "2", features = ["json"] }
+tiny_http = "0.12"
+rand = "0.8"
+
+[dev-dependencies]
+tempfile = "3"
+
+[profile.release]
+lto = true
+strip = true

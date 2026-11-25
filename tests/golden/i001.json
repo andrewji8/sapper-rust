@@ -1,0 +1,18 @@
+{
+  "id": "i001",
+  "title": null,
+  "from": [
+    "goal",
+    "f001"
+  ],
+  "to": null,
+  "description": "扫描 services",
+  "doc": null,
+  "creator": "tester",
+  "status": "open",
+  "worker": null,
+  "requires_confirmation": false,
+  "confirmed_at": null,
+  "created_at": "2026-01-01T00:00:00Z",
+  "concluded_at": null
+}
