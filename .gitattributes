@@ -1,0 +1,16 @@
+# sapper-rust
+
+# Golden byte fixtures must stay exactly as the Python generator emitted them
+# (LF, UTF-8, trailing newline). Git's autocrlf would otherwise rewrite them
+# on a Windows checkout and break the byte-for-byte compatibility test.
+tests/golden/*.json text eol=lf
+tests/golden/*.py   text eol=lf
+
+# Enforce LF for all source; let editors handle the rest.
+*.rs       text eol=lf
+*.toml     text eol=lf
+*.md       text eol=lf
+*.py       text eol=lf
+*.json     text eol=lf
+*.html     text eol=lf
+*.yml      text eol=lf
