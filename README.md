@@ -17,8 +17,6 @@
 <br>
 
 [简体中文](./README.md) · [English](./README.en.md) · [日本語](./README.ja.md)
-# sapper-rust
-
 `sapper` 的 Rust 重写版本。上游是 [andrewji8/sapper-v2](https://github.com/andrewji8/sapper-v2)（Python）。
 这个仓库把整套 fact-graph 工作记忆 + 多智能体指挥台搬进 Rust，目标：
 
@@ -233,5 +231,3 @@ Golden 文件由 `tests/golden/make_golden.py`（Python stdlib `json.dump(ensure
 ## 许可
 
 与上游 sapper-v2 一致。
-
-
