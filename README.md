@@ -211,6 +211,107 @@ Python 版 `sapper-v2/lib/sapper.py`（约 4700 行）在本仓库中的对应�
 | `_settings_patch.py` | `settings.rs` |
 | `cmd_view / view_serve` | `view.rs` |
 
+## 安装指南
+
+1. **安装 Rust 工具链**（如未安装）：
+
+   ```powershell
+   # 安装 rustup（Windows）
+   winget install Rustlang.Rustup
+   # 新开终端确认
+   rustc --version   # 1.75+，建议 1.80+
+   cargo --version
+   ```
+
+2. **安装引擎 CLI**：`claude` 命令在 PATH 上（`npm install -g @anthropic-ai/claude-code` 或公司内部发行版）。
+   也可以用 `SAPPER_BIN` 指向任意兼容 CLI。
+
+3. **构建**：
+
+   ```powershell
+   cd D:\rust\projects\sapper-rust
+   cargo build --release
+   # 产物: target\release\sapper.exe（约 5.5 MiB）
+   ```
+
+4. **（可选）加入 PATH**，之后任何目录都能直接 `sapper`：
+
+   ```powershell
+   [Environment]::SetEnvironmentVariable("Path", $env:Path + ";D:\rust\projects\sapper-rust\target\release", "User")
+   # 新开终端
+   sapper --version   # 期望: sapper 1.0.0
+   ```
+
+   注意：`sapper.exe` 会**向上最多 8 级**寻找 `assets/`（模板 + 知识库）。
+   把 exe 移出项目目录之外分发时，请连 `assets/` 一起打包（见「构建产物 & 分发」），
+   或设置 `SAPPER_KB_ROOT`。
+
+5. **验证安装**：
+
+   ```powershell
+   sapper kb list | Select-Object -First 3   # 能看到 kb001.. 即知识库加载成功
+   ```
+
+## 使用方法
+
+**典型工作流**（一个 CTF / 渗透题目从 0 到 1）：
+
+```powershell
+cd D:\your\challenge            # 题目目录
+sapper setup                     # 创建 .sapper/ + 注册 Claude Code hooks（可选）
+sapper init --goal "capture the flag" --origin "ctf-2026"
+sapper fact "靶机 IP" -k host -d addr=10.10.10.10 -t target
+sapper intent "端口扫描" --from f001
+sapper auto --minutes 30        # 自动 reason→explore→verify 循环（调用 claude）
+sapper view                     # 浏览器查看图形化进展
+sapper status                   # 终端快速查看
+sapper complete                 # 目标达成后收尾
+```
+
+**手动推进**（不自动）：
+
+```powershell
+sapper frontier                 # 看可开工的 intent
+sapper claim i001 --worker me   # 认领
+sapper done i001 --fact "ssh 22 端口开放" -k service -d port=22 -t ssh
+sapper dispatch explore --intent i001 --dry-run   # 先看 prompt 再实跑
+sapper recall "sql injection"   # 找历史相似节点
+```
+
+**比赛模式**（TSecBench）：
+
+```powershell
+$env:BENCHMARK_BASE_URL = "https://bench.example.com"
+$env:BENCHMARK_TOKEN    = "tok..."
+sapper arena list                     # 列题目
+sapper bench --minutes 60 --parallel 2  # 并行求解 + 自动交 flag
+sapper flag "flag{xxx}" --challenge c1 --submit
+```
+
+**Claude Code 集成**：
+
+```powershell
+sapper setup      # 注入 sessionstart / userpromptsubmit 两个 hook
+sapper teardown   # 移除（加 --purge 连 .sapper/ 一起删）
+```
+
+## 避坑指南
+
+| 坑 | 现象 | 解法 |
+|----|------|------|
+| `--from` 传了 fact 标题 | `from fact main-host does not exist` | `--from` 必须用 **fact id**（`f001`、`goal`），不是 `-t` 起的标题。先 `sapper status` / `graph` 查 id |
+| 把 description 塞进 `-d` | `unexpected argument '-d'` | description 是**位置参数**：`sapper fact "描述文字" -k host -d addr=...`。`-d` 是 `key=value` 数据 |
+| Windows 上 `peers / fleet` 报错 | `tmux not available` | 属正常降级：这些命令依赖 tmux。原生 Windows 上改用 `sapper auto`（子进程模式）；要完整多窗口编排请用 WSL/Linux |
+| 控制台中文乱码（`Web 淇℃伛...`） | PowerShell 默认 GBK 代码页显示 UTF-8 输出 | 会话内执行 `chcp 65001` 或 `Set-ConsoleOutputEncoding [System.Text.Encoding]::UTF8`。文件本身没问题（JSON 是 UTF-8 无 BOM） |
+| `kb list` 空 / 找不到条目 | `no kb entries at ...` | 知识库根解析顺序：`SAPPER_KB_ROOT` → exe 上溯 8 级找 `assets/kb` / `kb`。exe 被拷到深处目录时设 `SAPPER_KB_ROOT` 指向 `assets/kb` |
+| 锁 `os error 5`（旧构建） | `cannot lock ...: Access is denied` | 已修复（Windows 锁文件需 write 权限）。若仍出现：杀残留 `sapper` 进程 / 检查杀毒软件锁定了 `.lock` |
+| dispatch 超时 | `engine dispatch timed out` | 调大 `--timeout`（默认 600s）；额度不足配 `SAPPER_RETRY_MODEL` 降级模型 + `SAPPER_KEY_POOL` 多 key 轮换 |
+| engine 返回非 JSON | `did not return JSON` | `claude` 未登录 / 版本过旧。先单独跑 `claude -p "hi" --output-format json` 验证 |
+| `view --serve` 端口占用 | `could not bind` | 换端口：`sapper view --serve --port 8090`。非 127.0.0.1 绑定会有明文警告 |
+| 改了 golden 文件后测试挂 | 字节断言失败 | 用 Python 重新生成：`python tests\golden\make_golden.py`，确认输出仍在 `tests/golden/` 且 LF 行尾（`.gitattributes` 已固定） |
+| 双进程写同一 `.sapper/` | 偶发 `skipping ... file` 告警 | 正常：读路径对损坏/半写文件是告警跳过而非崩溃；写路径有独占锁，等前一进程结束即可 |
+| `intent --confirm` 与权限 | `conclusion permission denied` | `--confirm` intent 只有创建者或已 claim 的 worker 可 conclude；先 `sapper claim` 再 `done` |
+
 ## 测试
 
 ```powershell

@@ -216,6 +216,107 @@ Mapping of the Python `sapper-v2/lib/sapper.py` (~4700 lines) to this repo:
 | `_settings_patch.py` | `settings.rs` |
 | `cmd_view / view_serve` | `view.rs` |
 
+## Installation
+
+1. **Install the Rust toolchain** (if missing):
+
+   ```powershell
+   # install rustup (Windows)
+   winget install Rustlang.Rustup
+   # verify in a new terminal
+   rustc --version   # 1.75+, 1.80+ recommended
+   cargo --version
+   ```
+
+2. **Install the engine CLI**: `claude` on PATH (`npm install -g @anthropic-ai/claude-code`,
+   or your company's distribution). You can also point `SAPPER_BIN` at any compatible CLI.
+
+3. **Build**:
+
+   ```powershell
+   cd D:\rust\projects\sapper-rust
+   cargo build --release
+   # artifact: target\release\sapper.exe (~5.5 MiB)
+   ```
+
+4. **(Optional) add to PATH** so `sapper` works from any directory:
+
+   ```powershell
+   [Environment]::SetEnvironmentVariable("Path", $env:Path + ";D:\rust\projects\sapper-rust\target\release", "User")
+   # in a new terminal:
+   sapper --version   # expect: sapper 1.0.0
+   ```
+
+   Note: `sapper.exe` walks **up to 8 levels from its own directory** to find `assets/`
+   (templates + knowledge base). When shipping the exe outside the project, bundle `assets/`
+   with it (see "Packaging & distribution") or set `SAPPER_KB_ROOT`.
+
+5. **Verify the install**:
+
+   ```powershell
+   sapper kb list | Select-Object -First 3   # seeing kb001.. means the KB loaded
+   ```
+
+## Usage
+
+**Typical workflow** (a CTF / pentest engagement from zero):
+
+```powershell
+cd D:\your\challenge            # engagement directory
+sapper setup                     # create .sapper/ + register Claude Code hooks (optional)
+sapper init --goal "capture the flag" --origin "ctf-2026"
+sapper fact "target IP" -k host -d addr=10.10.10.10 -t target
+sapper intent "port scan" --from f001
+sapper auto --minutes 30        # autonomous reason -> explore -> verify loop (calls claude)
+sapper view                     # watch progress in the browser
+sapper status                   # quick terminal view
+sapper complete                 # wrap up once the goal is met
+```
+
+**Manual stepping** (no autonomy):
+
+```powershell
+sapper frontier                 # intents ready to work
+sapper claim i001 --worker me   # claim one
+sapper done i001 --fact "ssh port 22 open" -k service -d port=22 -t ssh
+sapper dispatch explore --intent i001 --dry-run   # inspect the prompt before running
+sapper recall "sql injection"   # find historically similar nodes
+```
+
+**Competition mode** (TSecBench):
+
+```powershell
+$env:BENCHMARK_BASE_URL = "https://bench.example.com"
+$env:BENCHMARK_TOKEN    = "tok..."
+sapper arena list                     # list challenges
+sapper bench --minutes 60 --parallel 2   # parallel solving + automatic flag submission
+sapper flag "flag{xxx}" --challenge c1 --submit
+```
+
+**Claude Code integration**:
+
+```powershell
+sapper setup      # inject the sessionstart / userpromptsubmit hooks
+sapper teardown   # remove them (add --purge to also delete .sapper/)
+```
+
+## Pitfall guide
+
+| Pitfall | Symptom | Fix |
+|---------|---------|-----|
+| Passing a fact **title** to `--from` | `from fact main-host does not exist` | `--from` needs the **fact id** (`f001`, `goal`), not the `-t` title. Check ids with `sapper status` / `graph` first |
+| Putting the description into `-d` | `unexpected argument '-d'` | The description is a **positional argument**: `sapper fact "description text" -k host -d addr=...`. `-d` is `key=value` data |
+| `peers / fleet` failing on Windows | `tmux not available` | Expected graceful degradation: these commands need tmux. On native Windows use `sapper auto` (subprocess mode); for full multi-window orchestration run WSL/Linux |
+| Garbled CJK in the console (`Web 淇℃伛...`) | PowerShell's GBK codepage rendering UTF-8 output | `chcp 65001` or `Set-ConsoleOutputEncoding [System.Text.Encoding]::UTF8` in the session. The files themselves are fine (UTF-8, no BOM) |
+| `kb list` empty / entries not found | `no kb entries at ...` | KB root resolution order: `SAPPER_KB_ROOT` -> walk up 8 levels from the exe for `assets/kb` / `kb`. If the exe was copied into a deep directory, set `SAPPER_KB_ROOT` to the `assets/kb` path |
+| Lock `os error 5` (older builds) | `cannot lock ...: Access is denied` | Fixed (the Windows lock file now opens with write access). If it still happens: kill stale `sapper` processes / check whether AV is locking `.lock` |
+| Dispatch timeout | `engine dispatch timed out` | Raise `--timeout` (default 600s); on quota exhaustion set `SAPPER_RETRY_MODEL` fallback + `SAPPER_KEY_POOL` multi-key rotation |
+| Engine returns non-JSON | `did not return JSON` | `claude` not logged in / too old. Verify with `claude -p "hi" --output-format json` first |
+| `view --serve` port in use | `could not bind` | Use another port: `sapper view --serve --port 8090`. Binding off 127.0.0.1 prints a plaintext warning |
+| Golden test fails after editing fixtures | byte-assertion mismatch | Regenerate with Python: `python tests\golden\make_golden.py`; output stays in `tests/golden/` with LF endings (`.gitattributes` pins them) |
+| Two processes writing one `.sapper/` | occasional `skipping ... file` warnings | Normal: the read path skips corrupt/half-written files with a warning instead of crashing; writers hold the exclusive lock, so just wait for the previous process to finish |
+| `intent --confirm` permission | `conclusion permission denied` | A `--confirm` intent can only be concluded by its creator or a worker that claimed it; `sapper claim` first, then `done` |
+
 ## Testing
 
 ```powershell

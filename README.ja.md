@@ -215,6 +215,107 @@ Python 版 `sapper-v2/lib/sapper.py`（約 4700 行）と本リポジトリの�
 | `_settings_patch.py` | `settings.rs` |
 | `cmd_view / view_serve` | `view.rs` |
 
+## インストールガイド
+
+1. **Rust ツールチェーンのインストール**（未インストールの場合）：
+
+   ```powershell
+   # rustup のインストール（Windows）
+   winget install Rustlang.Rustup
+   # 新規ターミナルで確認
+   rustc --version   # 1.75+、1.80+ 推奨
+   cargo --version
+   ```
+
+2. **エンジン CLI のインストール**：`claude` を PATH に（`npm install -g @anthropic-ai/claude-code`
+   または社内配信版）。`SAPPER_BIN` で互換 CLI を指定することもできます。
+
+3. **ビルド**：
+
+   ```powershell
+   cd D:\rust\projects\sapper-rust
+   cargo build --release
+   # 成果物: target\release\sapper.exe（約 5.5 MiB）
+   ```
+
+4. **（任意）PATH への追加**：どのディレクトリからでも `sapper` が使えるようになります：
+
+   ```powershell
+   [Environment]::SetEnvironmentVariable("Path", $env:Path + ";D:\rust\projects\sapper-rust\target\release", "User")
+   # 新規ターミナルで：
+   sapper --version   # 期待: sapper 1.0.0
+   ```
+
+   注意：`sapper.exe` は**自分自身のディレクトリから最大 8 階層上**を探索して `assets/`
+   （テンプレート + 知識ベース）を探します。exe をプロジェクト外に配置して配布する場合は
+   `assets/` と同梱してください（「ビルド成果物と配布」参照）、または `SAPPER_KB_ROOT` を設定してください。
+
+5. **インストール確認**：
+
+   ```powershell
+   sapper kb list | Select-Object -First 3   # kb001.. が表示されれば知識ベース読込成功
+   ```
+
+## 使用方法
+
+**典型ワークフロー**（CTF / 渗透題目を 0 から 1 へ）：
+
+```powershell
+cd D:\your\challenge            # 題目ディレクトリ
+sapper setup                     # .sapper/ 作成 + Claude Code フック登録（任意）
+sapper init --goal "capture the flag" --origin "ctf-2026"
+sapper fact "標的 IP" -k host -d addr=10.10.10.10 -t target
+sapper intent "ポートスキャン" --from f001
+sapper auto --minutes 30        # reason→explore→verify 自動ループ（claude を呼ぶ）
+sapper view                     # ブラウザで進捗を確認
+sapper status                   # ターミナルで快速確認
+sapper complete                 # 目標達成後に収束
+```
+
+**手動推進**（自動なし）：
+
+```powershell
+sapper frontier                 # 着手可能な intent
+sapper claim i001 --worker me   # 1 件を認領
+sapper done i001 --fact "ssh 22 ポート開放" -k service -d port=22 -t ssh
+sapper dispatch explore --intent i001 --dry-run   # 実行前にプロンプト確認
+sapper recall "sql injection"   # 過去に類似ノード探索
+```
+
+**競技モード**（TSecBench）：
+
+```powershell
+$env:BENCHMARK_BASE_URL = "https://bench.example.com"
+$env:BENCHMARK_TOKEN    = "tok..."
+sapper arena list                     # 題目リスト
+sapper bench --minutes 60 --parallel 2  # 並列解答 + 自動 flag 提出
+sapper flag "flag{xxx}" --challenge c1 --submit
+```
+
+**Claude Code 統合**：
+
+```powershell
+sapper setup      # sessionstart / userpromptsubmit の 2 フック注入
+sapper teardown   # 削除（--purge を付けると .sapper/ も削除）
+```
+
+## 罠回避ガイド
+
+| 罠 | 症状 | 対処 |
+|----|------|------|
+| `--from` に fact の**タイトル**を渡す | `from fact main-host does not exist` | `--from` には **fact id**（`f001`、`goal`）を。`-t` のタイトルではない。id は `sapper status` / `graph` で先確認 |
+| description を `-d` に埋める | `unexpected argument '-d'` | description は**位置引数**：`sapper fact "説明テキスト" -k host -d addr=...`。`-d` は `key=value` データ |
+| Windows で `peers / fleet` が失敗 | `tmux not available` | 予定の graceful degradation：これらのコマンドは tmux 依存。Windows ネイティブは `sapper auto`（サブプロセス方式）、完全な多窓編成は WSL/Linux で |
+| 中国語が文字化け（`Web 淇℃伛...`） | PowerShell の GBK コードページで UTF-8 出力を表示 | セッションで `chcp 65001` または `Set-ConsoleOutputEncoding [System.Text.Encoding]::UTF8`。ファイル自体は正常（UTF-8, BOM なし） |
+| `kb list` が空 / エントリ不在 | `no kb entries at ...` | 知識ベースルート解決順：`SAPPER_KB_ROOT` → exe から 8 階層上を `assets/kb` / `kb` 探索。exe を深いディレクトリにコピーした場合は `SAPPER_KB_ROOT` を `assets/kb` に設定 |
+| ロック `os error 5`（旧ビルド） | `cannot lock ...: Access is denied` | 修正済み（Windows のロックファイルは write 権限で開く）。再発時は残留 `sapper` プロセスを kill / AV が `.lock` をロックしていないか確認 |
+| dispatch タイムアウト | `engine dispatch timed out` | `--timeout` 増量（既定 600s）；クォータ枯渇時は `SAPPER_RETRY_MODEL` フォールバック + `SAPPER_KEY_POOL` 複数キー切替 |
+| エンジンが非 JSON を返す | `did not return JSON` | `claude` が未ログイン / 旧版本。先に `claude -p "hi" --output-format json` で確認 |
+| `view --serve` がポート占有 | `could not bind` | 別ポート：`sapper view --serve --port 8090`。127.0.0.1 以外へのバインドは警告を出力 |
+| golden ファイル編集後にテストが落ちる | バイトアサーション不一致 | Python で再生成：`python tests\golden\make_golden.py`；出力は `tests/golden/` に LF 改行で（`.gitattributes` が固定） |
+| 2 プロセスが同一 `.sapper/` を書き込み | ときどき `skipping ... file` 警告 | 正常：読み取り経路は破損 / 半書込ファイルは警告付きでスキップしてクラッシュしない。書き込みは独占ロックを持つため、前プロセス完了を待つ |
+| `intent --confirm` 権限 | `conclusion permission denied` | `--confirm` intent は作成者または認領済み worker だけが conclude 可；先に `sapper claim`、その後に `done` |
+
 ## テスト
 
 ```powershell
